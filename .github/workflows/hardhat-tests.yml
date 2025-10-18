@@ -1,0 +1,46 @@
+name: Hardhat Local Tests
+
+on:
+  push:
+    branches: [ "**" ]
+  pull_request:
+    branches: [ "**" ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [18]
+
+    env:
+      NODE_OPTIONS: --max_old_space_size=4096
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Compile contracts
+        run: npx hardhat compile
+
+      - name: Start local Hardhat node
+        run: |
+          npx hardhat node &
+          sleep 5
+        # le `&` lance le nœud en arrière-plan
+        # `sleep 5` laisse le temps au nœud de démarrer
+
+      - name: Run tests on localhost
+        run: npx hardhat test --network localhost
