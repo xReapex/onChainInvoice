@@ -11,36 +11,38 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
-    strategy:
-      fail-fast: false
-      matrix:
-        node-version: [18]
-
     env:
       NODE_OPTIONS: --max_old_space_size=4096
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js ${{ matrix.node-version }}
+      - name: Use Node.js 22 (latest LTS)
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: 22
+          check-latest: true
           cache: npm
+      - run: node -v
 
-      - name: Install dependencies
+      - name: Install deps
         run: npm ci
 
-      - name: Compile contracts
+      - name: Compile
         run: npx hardhat compile
 
       - name: Start local Hardhat node
         run: |
           npx hardhat node &
-          sleep 5
-        # le `&` lance le nœud en arrière-plan
-        # `sleep 5` laisse le temps au nœud de démarrer
+          # attend que le port 8545 réponde
+          for i in {1..20}; do
+            if nc -z localhost 8545; then
+              echo "Hardhat node is up"; break
+            fi
+            echo "Waiting for Hardhat node..."
+            sleep 1
+          done
 
       - name: Run tests on localhost
         run: npx hardhat test --network localhost
