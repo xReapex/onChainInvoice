@@ -15,7 +15,7 @@ describe('Invoice', function () {
     });
 
     it('should create an invoice', async function () {
-        await (await invoiceContract.connect(owner).createInvoice('Test Invoice')).wait();
+        await (await invoiceContract.connect(owner).createInvoice('Test Invoice', [])).wait();
         const invoice = await invoiceContract.invoices(0);
         expect(invoice.id).to.equal(0);
         expect(invoice.owner).to.equal(owner.address);
@@ -23,7 +23,7 @@ describe('Invoice', function () {
     });
 
     it('should add items to invoice', async function () {
-        await (await invoiceContract.connect(owner).createInvoice('Test Invoice')).wait();
+        await (await invoiceContract.connect(owner).createInvoice('Test Invoice', [])).wait();
         await (await invoiceContract.addItem(0, 'Item 1', 2, ethers.parseEther('1.0'))).wait();
         await (await invoiceContract.addItem(0, 'Item 2', 2, ethers.parseEther('1.0'))).wait();
         const item = await invoiceContract.getItems(0);
@@ -31,7 +31,7 @@ describe('Invoice', function () {
     });
 
     it('should remove items to invoice', async function () {
-        await (await invoiceContract.connect(owner).createInvoice('Test Invoice')).wait();
+        await (await invoiceContract.connect(owner).createInvoice('Test Invoice', [])).wait();
         await (await invoiceContract.addItem(0, 'Item 1', 2, ethers.parseEther('1.0'))).wait();
         await (await invoiceContract.addItem(0, 'Item 2', 2, ethers.parseEther('1.0'))).wait();
         
@@ -46,7 +46,7 @@ describe('Invoice', function () {
     });
 
     it('should get total price of invoice', async function () {
-        await (await invoiceContract.connect(owner).createInvoice('Test Invoice')).wait();
+        await (await invoiceContract.connect(owner).createInvoice('Test Invoice', [])).wait();
         await (await invoiceContract.addItem(0, 'Item 1', 2, ethers.parseEther('1.0'))).wait();
         await (await invoiceContract.addItem(0, 'Item 2', 3, ethers.parseEther('2.0'))).wait();
         const totalPrice = await invoiceContract.getTotalPrice(0);
@@ -54,7 +54,7 @@ describe('Invoice', function () {
     });
 
     it('should be able to pay invoice', async function () {
-        await (await invoiceContract.connect(owner).createInvoice('Test Invoice')).wait();
+        await (await invoiceContract.connect(owner).createInvoice('Test Invoice', [])).wait();
         await (await invoiceContract.addItem(0, 'Item 1', 2, ethers.parseEther('1.0'))).wait();
         await (await invoiceContract.addItem(0, 'Item 2', 3, ethers.parseEther('2.0'))).wait();
         const totalPrice = await invoiceContract.getTotalPrice(0);
@@ -65,7 +65,7 @@ describe('Invoice', function () {
 
     it('should refund overpayment', async function () {
         // Create invoice with 2 items worth 2 ether
-        await (await invoiceContract.connect(owner).createInvoice('Test Invoice')).wait();
+        await (await invoiceContract.connect(owner).createInvoice('Test Invoice', [])).wait();
         await (await invoiceContract.addItem(0, 'Item 1', 2, ethers.parseEther('1.0'))).wait();
         const totalPrice = await invoiceContract.getTotalPrice(0);
 
