@@ -2,7 +2,6 @@
 pragma solidity ^0.8.0;
 
 contract InvoiceManager {
-
     // Item
     struct Item {
         string description;
@@ -21,21 +20,43 @@ contract InvoiceManager {
 
     // Mapping of invoice id to Invoice
     mapping(uint256 => Invoice) public invoices;
+    mapping(address => uint256[]) private ownerInvoices;
     uint256 public nextInvoiceId;
 
+    // Get invoice
+    function getInvoice(
+        uint256 invoiceId
+    ) external view returns (Invoice memory) {
+        return invoices[invoiceId];
+    }
+
     // Create a new invoice
-    function createInvoice(string memory title) external returns (uint256) {
+    function createInvoice(string memory title, Item[] memory items) external {
         uint256 invoiceId = nextInvoiceId++;
         Invoice storage inv = invoices[invoiceId];
         inv.owner = msg.sender;
         inv.id = invoiceId;
         inv.title = title;
         inv.paid = false;
-        return invoiceId;
+
+        for (uint256 i = 0; i < items.length; i++) {
+            inv.items.push(Item({
+                description: items[i].description,
+                quantity: items[i].quantity,
+                unitPrice: items[i].unitPrice
+            }));
+        }
+
+        ownerInvoices[msg.sender].push(invoiceId);
     }
 
     // Add an item to an invoice
-    function addItem(uint256 invoiceId, string memory description, uint256 quantity, uint256 unitPrice) external {
+    function addItem(
+        uint256 invoiceId,
+        string memory description,
+        uint256 quantity,
+        uint256 unitPrice
+    ) external {
         Invoice storage inv = invoices[invoiceId];
         require(inv.owner == msg.sender, "Not invoice owner");
         inv.items.push(Item(description, quantity, unitPrice));
@@ -82,5 +103,17 @@ contract InvoiceManager {
         if (msg.value > totalPrice) {
             payable(msg.sender).transfer(msg.value - totalPrice);
         }
+    }
+
+    // Get all invoices created by owner
+    function getInvoicesByOwner(address owner) external view returns (Invoice[] memory) {
+        uint256[] memory ids = ownerInvoices[owner];
+        Invoice[] memory result = new Invoice[](ids.length);
+
+        for (uint256 i = 0; i < ids.length; i++) {
+            result[i] = invoices[ids[i]];
+        }
+
+        return result;
     }
 }

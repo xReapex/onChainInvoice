@@ -21,6 +21,7 @@ const config: HardhatUserConfig = {
       },
     },
   },
+  paths: {artifacts: "./app/src/artifacts"},
   networks: {
     hardhatMainnet: {
       type: "edr-simulated",
