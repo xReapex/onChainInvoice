@@ -23,6 +23,10 @@ export async function createInvoice(title, items) {
   return await getInvoice(invoiceId);
 }
 
+export async function deleteInvoice(invoiceId) {
+  await (await invoiceContract.deleteInvoice(invoiceId)).wait();
+}
+
 export async function getInvoice(invoiceId) {
   let invoice = await invoiceContract.getInvoice(invoiceId);
   return {

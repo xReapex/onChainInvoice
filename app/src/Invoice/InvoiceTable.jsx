@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Search, ChevronDown, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
 
-import { createInvoice, getInvoice, getInvoicesByOwner, nextInvoiceId } from './InvoiceContratManager';
+import { createInvoice, getInvoice, getInvoicesByOwner, deleteInvoice } from './InvoiceContratManager';
 import { connectWallet, getAddress } from '../Wallet/WalletManager';
 
 export default function InvoiceTable() {
@@ -21,7 +21,7 @@ export default function InvoiceTable() {
     ],
   });
 
-  // Auto connect wallet et charger les invoices
+  // Auto connect wallet and load invoices
   useEffect(() => {
     const initializeApp = async () => {
       try {
@@ -37,7 +37,7 @@ export default function InvoiceTable() {
     initializeApp();
   }, []);
 
-  // Fonction pour charger les invoices de l'owner
+  // Load Owners Invoices
   const loadInvoices = async () => {
     try {
       const ownerAddress = getAddress();
@@ -47,16 +47,16 @@ export default function InvoiceTable() {
       }
 
       const ownerInvoices = await getInvoicesByOwner(ownerAddress);
-      
-      // Formater les invoices pour l'affichage
+
+      // Format invoice data for display
       const formattedInvoices = ownerInvoices.map(invoice => ({
         id: invoice.id,
         title: invoice.title,
-        status: invoice.paid ? 'Paid' : 'Draft',
-        createdOn: new Date().toLocaleDateString('en-US', { 
-          month: 'short', 
-          day: 'numeric', 
-          year: 'numeric' 
+        status: invoice.paid ? 'Paid' : 'Issued',
+        createdOn: new Date().toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric'
         }),
         owner: invoice.owner,
         items: invoice.items
@@ -123,27 +123,27 @@ export default function InvoiceTable() {
         return;
       }
 
-      const hasValidItem = formData.items.some(i => 
+      const hasValidItem = formData.items.some(i =>
         i.description && Number(i.quantity) > 0 && Number(i.unitPrice) > 0
       );
-      
+
       if (!hasValidItem) {
         alert('Add at least one item with valid quantity and price');
         return;
       }
 
-      // Créer l'invoice sur le smart contract
+      // Create invoice
       const invoice = await createInvoice(formData.title, formData.items);
-      
-      // Recharger la liste des invoices
+
+      // Reload invoices
       await loadInvoices();
 
-      // Reset form et fermer modal
-      setFormData({ 
-        title: '', 
-        status: 'Draft', 
-        ownerAddress: getAddress(), 
-        items: [{ description: '', quantity: 1, unitPrice: '' }] 
+      // Reset form and close modal
+      setFormData({
+        title: '',
+        status: 'Draft',
+        ownerAddress: getAddress(),
+        items: [{ description: '', quantity: 1, unitPrice: '' }]
       });
       setShowCreateModal(false);
 
@@ -153,7 +153,13 @@ export default function InvoiceTable() {
     }
   };
 
-  // Filtrer les invoices
+  function handleDeleteInvoice(invoiceId) {
+    deleteInvoice(invoiceId).then(() => {
+      loadInvoices();
+    })
+  }
+
+  // Filter Invoices
   const filteredInvoices = invoices.filter(invoice => {
     const matchesSearch = invoice.title.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'All statuses' || invoice.status === statusFilter;
@@ -201,13 +207,6 @@ export default function InvoiceTable() {
             </select>
             <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 pointer-events-none" size={20} />
           </div>
-
-          <div className="relative">
-            <button className="bg-gray-50 border-0 rounded-lg px-4 py-3 text-gray-700 flex items-center gap-2 hover:bg-gray-100">
-              <span>Due date</span>
-              <Calendar size={20} className="text-gray-500" />
-            </button>
-          </div>
         </div>
       </div>
 
@@ -235,11 +234,12 @@ export default function InvoiceTable() {
                   </div>
                 </th>
                 <th className="text-left py-4 px-2 text-sm font-medium text-gray-600">Invoice ID</th>
+                <th className="text-left py-4 px-2 text-sm font-medium text-gray-600">Action</th>
               </tr>
             </thead>
             <tbody>
               {filteredInvoices.map((invoice, index) => (
-                <tr key={invoice.id} className={`border-b border-gray-100 hover:bg-gray-50 cursor-pointer ${index === filteredInvoices.length - 1 ? 'border-b-2 border-gray-300' : ''}`}>
+                <tr key={invoice.id} className={`border-b border-gray-100 hover:bg-gray-50 ${index === filteredInvoices.length - 1 ? 'border-b-2 border-gray-300' : ''}`}>
                   <td className="py-4 px-2 text-gray-900 font-medium">{invoice.title}</td>
                   <td className="py-4 px-2">
                     <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium ${getStatusStyle(invoice.status)}`}>
@@ -249,6 +249,11 @@ export default function InvoiceTable() {
                   </td>
                   <td className="py-4 px-2 text-gray-700">{invoice.createdOn}</td>
                   <td className="py-4 px-2 text-gray-700">#{invoice.id}</td>
+                  <td className="py-4 px-2">
+                    <button onClick={() => {handleDeleteInvoice(invoice.id)}} className="text-red-500 hover:text-red-700 font-medium cursor-pointer">
+                      Delete
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -285,7 +290,7 @@ export default function InvoiceTable() {
           <div className="bg-white rounded-xl p-8 w-full max-w-3xl max-h-[90vh] overflow-y-auto">
             <h2 className="text-2xl font-bold text-gray-900 mb-6">Create New Invoice</h2>
 
-            {/* Formulaire */}
+            {/* Form */}
             <div className="space-y-5">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Invoice title</label>
@@ -293,7 +298,7 @@ export default function InvoiceTable() {
                   type="text"
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  placeholder="INV-00001"
+                  placeholder="Invoice Title"
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
