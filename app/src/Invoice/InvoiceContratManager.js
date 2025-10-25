@@ -51,3 +51,12 @@ export async function nextInvoiceId() {
   let nextId = await invoiceContract.nextInvoiceId();
   return nextId;
 }
+
+export async function getTotalPrice(invoiceId) {
+  let totalPrice = await invoiceContract.getTotalPrice(invoiceId);
+  return totalPrice;
+}
+
+export async function payInvoice(invoiceId, amountWei) {
+  await (await invoiceContract.payInvoice(invoiceId, { value: amountWei })).wait();
+}

@@ -22,6 +22,16 @@ describe('Invoice', function () {
         expect(invoice.title).to.equal('Test Invoice');
     });
 
+    it('should delete an invoice', async function () {
+        await (await invoiceContract.connect(owner).createInvoice('Test Invoice', [])).wait();
+        let invoice = await invoiceContract.invoices(0);
+        expect(invoice.id).to.equal(0);
+        await (await invoiceContract.connect(owner).deleteInvoice(0)).wait();
+        invoice = await invoiceContract.invoices(0);
+        expect(invoice.id).to.equal(0);
+        expect(invoice.owner).to.equal(ethers.ZeroAddress);
+    });
+
     it('should add items to invoice', async function () {
         await (await invoiceContract.connect(owner).createInvoice('Test Invoice', [])).wait();
         await (await invoiceContract.addItem(0, 'Item 1', 2, ethers.parseEther('1.0'))).wait();

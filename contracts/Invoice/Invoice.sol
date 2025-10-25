@@ -50,6 +50,24 @@ contract InvoiceManager {
         ownerInvoices[msg.sender].push(invoiceId);
     }
 
+    function deleteInvoice(uint256 invoiceId) external {
+        Invoice storage inv = invoices[invoiceId];
+        require(inv.owner == msg.sender, "Not invoice owner");
+
+        // Delete invoice
+        delete invoices[invoiceId];
+
+        // Remove from owner's list
+        uint256[] storage ownerInvs = ownerInvoices[msg.sender];
+        for (uint256 i = 0; i < ownerInvs.length; i++) {
+            if (ownerInvs[i] == invoiceId) {
+                ownerInvs[i] = ownerInvs[ownerInvs.length - 1];
+                ownerInvs.pop();
+                break;
+            }
+        }
+    }
+
     // Add an item to an invoice
     function addItem(
         uint256 invoiceId,

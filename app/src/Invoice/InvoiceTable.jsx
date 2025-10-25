@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Search, ChevronDown, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
 
-import { createInvoice, getInvoice, getInvoicesByOwner, deleteInvoice } from './InvoiceContratManager';
+import { createInvoice, getInvoice, getInvoicesByOwner, deleteInvoice, payInvoice, getTotalPrice } from './InvoiceContratManager';
 import { connectWallet, getAddress } from '../Wallet/WalletManager';
 
 export default function InvoiceTable() {
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All statuses');
   const [customerFilter, setCustomerFilter] = useState('All customers');
@@ -19,6 +20,10 @@ export default function InvoiceTable() {
     items: [
       { description: '', quantity: 1, unitPrice: '' },
     ],
+  });
+
+  const [payFormData, setPayFormData] = useState({
+    invoiceId: '',
   });
 
   // Auto connect wallet and load invoices
@@ -153,6 +158,30 @@ export default function InvoiceTable() {
     }
   };
 
+  async function handlePayInvoice() {
+    try {
+      const id = (payFormData.invoiceId || '').trim();
+      if (!id) {
+        alert('Please enter a valid Invoice ID');
+        return;
+      }
+
+      // Pay invoice
+      const totalWei = await getTotalPrice(id);
+      await payInvoice(id, totalWei);
+
+      // Reset + reload
+      setPayFormData({ invoiceId: '' });
+      setShowImportModal(false);
+      await loadInvoices();
+
+    } catch (error) {
+      console.error('Error paying invoice:', error);
+      alert('Error paying invoice: ' + error.message);
+    }
+  }
+
+  // Delete Invoice
   function handleDeleteInvoice(invoiceId) {
     deleteInvoice(invoiceId).then(() => {
       loadInvoices();
@@ -171,12 +200,20 @@ export default function InvoiceTable() {
       {/* Header */}
       <div className="border-b border-gray-200 px-8 py-6 flex justify-between items-center">
         <h1 className="text-4xl font-bold text-gray-900">Invoice Manager</h1>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition"
-        >
-          Create Invoice
-        </button>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => setShowImportModal(true)}
+            className="bg-gray-100 text-gray-800 px-6 py-3 rounded-lg font-medium hover:bg-gray-200 transition"
+          >
+            Pay an Invoice
+          </button>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition"
+          >
+            Create Invoice
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -200,9 +237,7 @@ export default function InvoiceTable() {
               className="appearance-none bg-gray-50 border-0 rounded-lg px-4 py-3 pr-10 text-gray-700 cursor-pointer focus:ring-2 focus:ring-blue-500"
             >
               <option>All statuses</option>
-              <option>Draft</option>
               <option>Issued</option>
-              <option>Overdue</option>
               <option>Paid</option>
             </select>
             <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 pointer-events-none" size={20} />
@@ -250,7 +285,7 @@ export default function InvoiceTable() {
                   <td className="py-4 px-2 text-gray-700">{invoice.createdOn}</td>
                   <td className="py-4 px-2 text-gray-700">#{invoice.id}</td>
                   <td className="py-4 px-2">
-                    <button onClick={() => {handleDeleteInvoice(invoice.id)}} className="text-red-500 hover:text-red-700 font-medium cursor-pointer">
+                    <button onClick={() => { handleDeleteInvoice(invoice.id) }} className="text-red-500 hover:text-red-700 font-medium cursor-pointer">
                       Delete
                     </button>
                   </td>
@@ -286,8 +321,8 @@ export default function InvoiceTable() {
 
       {/* Create Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl p-8 w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 backdrop-blur-xs bg-white/30 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl p-8 w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-xl">
             <h2 className="text-2xl font-bold text-gray-900 mb-6">Create New Invoice</h2>
 
             {/* Form */}
@@ -382,6 +417,42 @@ export default function InvoiceTable() {
                   className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition"
                 >
                   Create Invoice
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pay Modal */}
+      {showImportModal && (
+        <div className="fixed inset-0 backdrop-blur-xs bg-white/30 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl p-8 w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-xl">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">Pay an Invoice</h2>
+
+            {/* Form */}
+            <div className="space-y-5">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Invoice ID</label>
+                <input
+                  value={payFormData.invoiceId}
+                  onChange={(e) => setPayFormData({ ...payFormData, invoiceId: e.target.value })}
+                  placeholder="Enter Invoice ID"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={() => setShowImportModal(false)}
+                  className="flex-1 px-6 py-3 border border-gray-300 rounded-lg font-medium text-gray-700 hover:bg-gray-50 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handlePayInvoice}
+                  className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition"
+                >
+                  Pay Invoice
                 </button>
               </div>
             </div>
