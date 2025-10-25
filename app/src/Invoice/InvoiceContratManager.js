@@ -1,4 +1,4 @@
-import { ethers } from "ethers";
+import { ethers, ZeroAddress } from "ethers";
 import invoiceArtifact from '../artifacts/contracts/Invoice/Invoice.sol/InvoiceManager.json';
 
 const CONTRACT_ADDRESS = '0x5FbDB2315678afecb367f032d93F642f64180aa3';
@@ -13,8 +13,8 @@ const invoiceContract = new ethers.Contract(
   signer
 );
 
-export async function createInvoice(title, items) {
-  await (await invoiceContract.createInvoice(title, items)).wait();
+export async function createInvoice(title, items, payerAddress = ZeroAddress) {
+  await (await invoiceContract.createInvoice(title, items, payerAddress)).wait();
 
   // get id
   const next = await nextInvoiceId();

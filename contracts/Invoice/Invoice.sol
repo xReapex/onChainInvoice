@@ -12,15 +12,17 @@ contract InvoiceManager {
     // Invoice
     struct Invoice {
         address owner;
+        address payer;
         uint256 id;
         string title;
         bool paid;
         Item[] items;
     }
 
-    // Mapping of invoice id to Invoice
+    // Mapping for invoices
     mapping(uint256 => Invoice) public invoices;
     mapping(address => uint256[]) private ownerInvoices;
+    mapping(address => uint256[]) private attributedInvoice;
     uint256 public nextInvoiceId;
 
     // Get invoice
@@ -31,20 +33,23 @@ contract InvoiceManager {
     }
 
     // Create a new invoice
-    function createInvoice(string memory title, Item[] memory items) external {
+    function createInvoice(string memory title, Item[] memory items, address payer) public {
         uint256 invoiceId = nextInvoiceId++;
         Invoice storage inv = invoices[invoiceId];
         inv.owner = msg.sender;
+        inv.payer = payer;
         inv.id = invoiceId;
         inv.title = title;
         inv.paid = false;
 
         for (uint256 i = 0; i < items.length; i++) {
-            inv.items.push(Item({
-                description: items[i].description,
-                quantity: items[i].quantity,
-                unitPrice: items[i].unitPrice
-            }));
+            inv.items.push(
+                Item(
+                    items[i].description,
+                    items[i].quantity,
+                    items[i].unitPrice
+                )
+            );
         }
 
         ownerInvoices[msg.sender].push(invoiceId);
@@ -109,6 +114,13 @@ contract InvoiceManager {
     function payInvoice(uint256 invoiceId) external payable {
         Invoice storage inv = invoices[invoiceId];
         uint256 totalPrice = this.getTotalPrice(invoiceId);
+
+        if (inv.payer != address(0)) {
+            require(
+                msg.sender == inv.payer,
+                "You are not authorized to pay this invoice"
+            );
+        }
         require(msg.value >= totalPrice, "Insufficient payment");
 
         // Mark invoice as paid
@@ -124,7 +136,9 @@ contract InvoiceManager {
     }
 
     // Get all invoices created by owner
-    function getInvoicesByOwner(address owner) external view returns (Invoice[] memory) {
+    function getInvoicesByOwner(
+        address owner
+    ) external view returns (Invoice[] memory) {
         uint256[] memory ids = ownerInvoices[owner];
         Invoice[] memory result = new Invoice[](ids.length);
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Search, ChevronDown, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
-
+import { ZeroAddress } from "ethers";
 import { createInvoice, getInvoice, getInvoicesByOwner, deleteInvoice, payInvoice, getTotalPrice } from './InvoiceContratManager';
 import { connectWallet, getAddress } from '../Wallet/WalletManager';
 
@@ -138,7 +138,7 @@ export default function InvoiceTable() {
       }
 
       // Create invoice
-      const invoice = await createInvoice(formData.title, formData.items);
+      await createInvoice(formData.title, formData.items, formData.payerAddress || ZeroAddress);
 
       // Reload invoices
       await loadInvoices();
