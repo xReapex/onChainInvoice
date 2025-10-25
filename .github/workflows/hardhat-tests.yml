@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  test:
+  hardhat-test:
     runs-on: ubuntu-latest
 
     env:
