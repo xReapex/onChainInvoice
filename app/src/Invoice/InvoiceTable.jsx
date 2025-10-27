@@ -1,25 +1,33 @@
-import { useEffect, useState } from 'react'
-import { Search, ChevronDown, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
-import { ZeroAddress } from "ethers";
-import { createInvoice, getInvoice, getInvoicesByOwner, deleteInvoice, payInvoice, getTotalPrice } from './InvoiceContratManager';
+import { useEffect, useMemo, useState } from 'react';
+import { Search, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ZeroAddress, formatEther } from 'ethers';
+import {
+  createInvoice,
+  getAttributedInvoice,
+  getInvoicesByOwner,
+  deleteInvoice,
+  payInvoice,
+  getTotalPrice,
+} from './InvoiceContratManager';
 import { connectWallet, getAddress } from '../Wallet/WalletManager';
 
 export default function InvoiceTable() {
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [payingId, setPayingId] = useState(null);
+
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All statuses');
-  const [customerFilter, setCustomerFilter] = useState('All customers');
 
   const [formData, setFormData] = useState({
     title: '',
     status: '',
     ownerAddress: getAddress(),
-    items: [
-      { description: '', quantity: 1, unitPrice: '' },
-    ],
+    attributedAddress: '',
+    items: [{ description: '', quantity: 1, unitPrice: '' }],
   });
 
   const [payFormData, setPayFormData] = useState({
@@ -40,9 +48,10 @@ export default function InvoiceTable() {
     };
 
     initializeApp();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Load Owners Invoices
+  // Load invoices (owner + attributed) and merge
   const loadInvoices = async () => {
     try {
       const ownerAddress = getAddress();
@@ -52,22 +61,36 @@ export default function InvoiceTable() {
       }
 
       const ownerInvoices = await getInvoicesByOwner(ownerAddress);
+      const attributedInvoices = (await getAttributedInvoice(ownerAddress)) ?? [];
 
-      // Format invoice data for display
-      const formattedInvoices = ownerInvoices.map(invoice => ({
-        id: invoice.id,
-        title: invoice.title,
+      const formattedOwner = ownerInvoices.map((invoice) => ({
+        id: Number(invoice.id),
+        title: invoice.title ?? '',
         status: invoice.paid ? 'Paid' : 'Issued',
         createdOn: new Date().toLocaleDateString('en-US', {
           month: 'short',
           day: 'numeric',
-          year: 'numeric'
+          year: 'numeric',
         }),
         owner: invoice.owner,
-        items: invoice.items
+        items: invoice.items ?? [],
       }));
 
-      setInvoices(formattedInvoices);
+      const formattedAttributed = attributedInvoices.map((invoice) => ({
+        id: Number(invoice.id),
+        title: invoice.title ?? '',
+        status: invoice.paid ? 'Paid' : 'Attributed',
+        createdOn: new Date().toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        }),
+        owner: invoice.owner,
+        items: invoice.items ?? [],
+      }));
+
+      const allInvoices = [...formattedOwner, ...formattedAttributed];
+      setInvoices(allInvoices);
     } catch (error) {
       console.error('Error loading invoices:', error);
     }
@@ -75,42 +98,52 @@ export default function InvoiceTable() {
 
   const getStatusStyle = (status) => {
     switch (status) {
-      case 'Paid': return 'bg-emerald-100 text-emerald-700';
-      case 'Issued': return 'bg-blue-100 text-blue-700';
-      case 'Overdue': return 'bg-orange-100 text-orange-700';
-      case 'Draft': return 'bg-gray-100 text-gray-700';
-      default: return 'bg-gray-100 text-gray-700';
+      case 'Paid':
+        return 'bg-emerald-100 text-emerald-700';
+      case 'Issued':
+        return 'bg-blue-100 text-blue-700';
+      case 'Attributed':
+        return 'bg-purple-100 text-purple-700';
+      default:
+        return 'bg-gray-100 text-gray-700';
     }
   };
 
   const getStatusDot = (status) => {
     switch (status) {
-      case 'Paid': return 'bg-emerald-500';
-      case 'Issued': return 'bg-blue-500';
-      case 'Overdue': return 'bg-orange-500';
-      case 'Draft': return 'bg-gray-500';
-      default: return 'bg-gray-500';
+      case 'Paid':
+        return 'bg-emerald-500';
+      case 'Issued':
+        return 'bg-blue-500';
+      case 'Attributed':
+        return 'bg-purple-500';
+      default:
+        return 'bg-gray-500';
     }
   };
 
   // --- Items Management ---
   const addItemRow = () => {
-    setFormData({
-      ...formData,
-      items: [...formData.items, { description: '', quantity: 1, unitPrice: '' }],
-    });
+    setFormData((prev) => ({
+      ...prev,
+      items: [...prev.items, { description: '', quantity: 1, unitPrice: '' }],
+    }));
   };
 
   const removeItemRow = (index) => {
-    const newItems = [...formData.items];
-    newItems.splice(index, 1);
-    setFormData({ ...formData, items: newItems });
+    setFormData((prev) => {
+      const newItems = [...prev.items];
+      newItems.splice(index, 1);
+      return { ...prev, items: newItems };
+    });
   };
 
   const updateItemField = (index, field, value) => {
-    const newItems = [...formData.items];
-    newItems[index][field] = value;
-    setFormData({ ...formData, items: newItems });
+    setFormData((prev) => {
+      const newItems = [...prev.items];
+      newItems[index] = { ...newItems[index], [field]: value };
+      return { ...prev, items: newItems };
+    });
   };
 
   const calculateTotal = () => {
@@ -128,8 +161,8 @@ export default function InvoiceTable() {
         return;
       }
 
-      const hasValidItem = formData.items.some(i =>
-        i.description && Number(i.quantity) > 0 && Number(i.unitPrice) > 0
+      const hasValidItem = formData.items.some(
+        (i) => i.description && Number(i.quantity) > 0 && Number(i.unitPrice) > 0
       );
 
       if (!hasValidItem) {
@@ -137,27 +170,29 @@ export default function InvoiceTable() {
         return;
       }
 
-      // Create invoice
-      await createInvoice(formData.title, formData.items, formData.payerAddress || ZeroAddress);
+      await createInvoice(
+        formData.title,
+        formData.items,
+        formData.attributedAddress || ZeroAddress
+      );
 
-      // Reload invoices
       await loadInvoices();
 
-      // Reset form and close modal
       setFormData({
         title: '',
         status: 'Draft',
         ownerAddress: getAddress(),
-        items: [{ description: '', quantity: 1, unitPrice: '' }]
+        attributedAddress: '',
+        items: [{ description: '', quantity: 1, unitPrice: '' }],
       });
       setShowCreateModal(false);
-
     } catch (error) {
       console.error('Error creating invoice:', error);
       alert('Error creating invoice: ' + error.message);
     }
   };
 
+  // Pay via modal (manual ID)
   async function handlePayInvoice() {
     try {
       const id = (payFormData.invoiceId || '').trim();
@@ -166,18 +201,41 @@ export default function InvoiceTable() {
         return;
       }
 
-      // Pay invoice
       const totalWei = await getTotalPrice(id);
+      const ok = confirm(`Pay invoice #${id} for ${formatEther(totalWei)} ETH ?`);
+      if (!ok) return;
+
       await payInvoice(id, totalWei);
 
-      // Reset + reload
       setPayFormData({ invoiceId: '' });
       setShowImportModal(false);
       await loadInvoices();
-
     } catch (error) {
       console.error('Error paying invoice:', error);
       alert('Error paying invoice: ' + error.message);
+    }
+  }
+
+  // Quick pay from row (uses invoice.id directly)
+  async function handleQuickPay(invoiceId) {
+    try {
+      setPayingId(invoiceId);
+      const id = String(invoiceId).trim();
+      if (!id) {
+        alert('Invalid invoice ID');
+        return;
+      }
+      const totalWei = await getTotalPrice(id);
+      const ok = confirm(`Pay invoice #${id} for ${totalWei} ETH ?`);
+      if (!ok) return console.log('error');
+
+      await payInvoice(id, totalWei);
+      await loadInvoices();
+    } catch (error) {
+      console.error('Error paying invoice:', error);
+      alert('Error paying invoice: ' + (error?.message || String(error)));
+    } finally {
+      setPayingId(null);
     }
   }
 
@@ -185,15 +243,20 @@ export default function InvoiceTable() {
   function handleDeleteInvoice(invoiceId) {
     deleteInvoice(invoiceId).then(() => {
       loadInvoices();
-    })
+    });
   }
 
-  // Filter Invoices
-  const filteredInvoices = invoices.filter(invoice => {
-    const matchesSearch = invoice.title.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'All statuses' || invoice.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  // Filter Invoices (robuste)
+  const filteredInvoices = useMemo(() => {
+    const q = (searchTerm ?? '').toLowerCase();
+    return invoices.filter((invoice) => {
+      const title = (invoice?.title ?? '').toLowerCase();
+      const matchesSearch = title.includes(q);
+      const matchesStatus =
+        statusFilter === 'All statuses' || invoice.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [invoices, searchTerm, statusFilter]);
 
   return (
     <div className="bg-white min-h-screen">
@@ -220,7 +283,10 @@ export default function InvoiceTable() {
       <div className="px-8 py-6 border-b border-gray-200">
         <div className="flex gap-4 items-center">
           <div className="flex-1 relative">
-            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+            <Search
+              className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"
+              size={20}
+            />
             <input
               type="text"
               placeholder="Search"
@@ -239,8 +305,12 @@ export default function InvoiceTable() {
               <option>All statuses</option>
               <option>Issued</option>
               <option>Paid</option>
+              <option>Attributed</option>
             </select>
-            <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 pointer-events-none" size={20} />
+            <ChevronDown
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 pointer-events-none"
+              size={20}
+            />
           </div>
         </div>
       </div>
@@ -260,34 +330,79 @@ export default function InvoiceTable() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200">
-                <th className="text-left py-4 px-2 text-sm font-medium text-gray-600">Title</th>
-                <th className="text-left py-4 px-2 text-sm font-medium text-gray-600">Status</th>
+                <th className="text-left py-4 px-2 text-sm font-medium text-gray-600">
+                  Title
+                </th>
+                <th className="text-left py-4 px-2 text-sm font-medium text-gray-600">
+                  Status
+                </th>
                 <th className="text-left py-4 px-2 text-sm font-medium text-gray-600">
                   <div className="flex items-center gap-1">
                     Created on
                     <ChevronDown size={16} className="text-gray-400" />
                   </div>
                 </th>
-                <th className="text-left py-4 px-2 text-sm font-medium text-gray-600">Invoice ID</th>
-                <th className="text-left py-4 px-2 text-sm font-medium text-gray-600">Action</th>
+                <th className="text-left py-4 px-2 text-sm font-medium text-gray-600">
+                  Invoice ID
+                </th>
+                <th className="text-left py-4 px-2 text-sm font-medium text-gray-600">
+                  Action
+                </th>
               </tr>
             </thead>
             <tbody>
               {filteredInvoices.map((invoice, index) => (
-                <tr key={invoice.id} className={`border-b border-gray-100 hover:bg-gray-50 ${index === filteredInvoices.length - 1 ? 'border-b-2 border-gray-300' : ''}`}>
-                  <td className="py-4 px-2 text-gray-900 font-medium">{invoice.title}</td>
+                <tr
+                  key={invoice.id}
+                  className={`border-b border-gray-100 hover:bg-gray-50 ${
+                    index === filteredInvoices.length - 1
+                      ? 'border-b-2 border-gray-300'
+                      : ''
+                  }`}
+                >
+                  <td className="py-4 px-2 text-gray-900 font-medium">
+                    {invoice.title}
+                  </td>
                   <td className="py-4 px-2">
-                    <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium ${getStatusStyle(invoice.status)}`}>
-                      <span className={`w-2 h-2 rounded-full ${getStatusDot(invoice.status)}`}></span>
+                    <span
+                      className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium ${getStatusStyle(
+                        invoice.status
+                      )}`}
+                    >
+                      <span
+                        className={`w-2 h-2 rounded-full ${getStatusDot(
+                          invoice.status
+                        )}`}
+                      ></span>
                       {invoice.status}
                     </span>
                   </td>
                   <td className="py-4 px-2 text-gray-700">{invoice.createdOn}</td>
                   <td className="py-4 px-2 text-gray-700">#{invoice.id}</td>
                   <td className="py-4 px-2">
-                    <button onClick={() => { handleDeleteInvoice(invoice.id) }} className="text-red-500 hover:text-red-700 font-medium cursor-pointer">
-                      Delete
-                    </button>
+                    {invoice.status === 'Attributed' ? (
+                      <button
+                        onClick={() => handleQuickPay(invoice.id)}
+                        disabled={payingId === invoice.id}
+                        className={`font-medium cursor-pointer ${
+                          payingId === invoice.id
+                            ? 'text-gray-400 cursor-not-allowed'
+                            : 'text-blue-600 hover:text-blue-800'
+                        }`}
+                        title={
+                          payingId === invoice.id ? 'Processing…' : 'Pay this invoice'
+                        }
+                      >
+                        {payingId === invoice.id ? 'Paying…' : 'Pay Invoice'}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleDeleteInvoice(invoice.id)}
+                        className="text-red-500 hover:text-red-700 font-medium cursor-pointer"
+                      >
+                        Delete
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -296,7 +411,7 @@ export default function InvoiceTable() {
         )}
       </div>
 
-      {/* Pagination */}
+      {/* Pagination (UI only) */}
       <div className="px-8 py-6 flex justify-between items-center">
         <div className="flex gap-2">
           <button className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50">
@@ -314,7 +429,10 @@ export default function InvoiceTable() {
               <option>50</option>
               <option>100</option>
             </select>
-            <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 pointer-events-none" size={16} />
+            <ChevronDown
+              className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 pointer-events-none"
+              size={16}
+            />
           </div>
         </div>
       </div>
@@ -323,17 +441,41 @@ export default function InvoiceTable() {
       {showCreateModal && (
         <div className="fixed inset-0 backdrop-blur-xs bg-white/30 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl p-8 w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-xl">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Create New Invoice</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">
+              Create New Invoice
+            </h2>
 
             {/* Form */}
             <div className="space-y-5">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Invoice title</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Invoice title
+                </label>
                 <input
                   type="text"
                   value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, title: e.target.value })
+                  }
                   placeholder="Invoice Title"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Attribute Invoice to Address (optional)
+                </label>
+                <input
+                  type="text"
+                  value={formData.attributedAddress}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      attributedAddress: e.target.value,
+                    })
+                  }
+                  placeholder="0x... (leave empty to allow anyone to pay)"
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
@@ -342,16 +484,26 @@ export default function InvoiceTable() {
               <div>
                 <div className="flex justify-between items-center mb-3">
                   <h3 className="text-lg font-semibold">Invoice Items</h3>
-                  <button onClick={addItemRow} className="text-blue-600 hover:underline">+ Add Item</button>
+                  <button onClick={addItemRow} className="text-blue-600 hover:underline">
+                    + Add Item
+                  </button>
                 </div>
 
                 <table className="w-full border border-gray-200 rounded-lg">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="p-2 text-left text-sm font-medium text-gray-700">Description</th>
-                      <th className="p-2 text-left text-sm font-medium text-gray-700">Qty</th>
-                      <th className="p-2 text-left text-sm font-medium text-gray-700">Unit Price</th>
-                      <th className="p-2 text-right text-sm font-medium text-gray-700">Total</th>
+                      <th className="p-2 text-left text-sm font-medium text-gray-700">
+                        Description
+                      </th>
+                      <th className="p-2 text-left text-sm font-medium text-gray-700">
+                        Qty
+                      </th>
+                      <th className="p-2 text-left text-sm font-medium text-gray-700">
+                        Unit Price (ETH)
+                      </th>
+                      <th className="p-2 text-right text-sm font-medium text-gray-700">
+                        Total
+                      </th>
                       <th></th>
                     </tr>
                   </thead>
@@ -363,7 +515,9 @@ export default function InvoiceTable() {
                             type="text"
                             placeholder="Description"
                             value={item.description}
-                            onChange={(e) => updateItemField(index, 'description', e.target.value)}
+                            onChange={(e) =>
+                              updateItemField(index, 'description', e.target.value)
+                            }
                             className="w-full border border-gray-300 rounded-lg px-2 py-1"
                           />
                         </td>
@@ -372,7 +526,13 @@ export default function InvoiceTable() {
                             type="number"
                             min="1"
                             value={item.quantity}
-                            onChange={(e) => updateItemField(index, 'quantity', e.target.valueAsNumber || 1)}
+                            onChange={(e) =>
+                              updateItemField(
+                                index,
+                                'quantity',
+                                e.target.valueAsNumber || 1
+                              )
+                            }
                             className="w-20 border border-gray-300 rounded-lg px-2 py-1 text-right"
                           />
                         </td>
@@ -382,14 +542,25 @@ export default function InvoiceTable() {
                             min="0"
                             step="0.01"
                             value={item.unitPrice}
-                            onChange={(e) => updateItemField(index, 'unitPrice', e.target.valueAsNumber || 0)}
+                            onChange={(e) =>
+                              updateItemField(
+                                index,
+                                'unitPrice',
+                                e.target.valueAsNumber || 0
+                              )
+                            }
                             className="w-28 border border-gray-300 rounded-lg px-2 py-1 text-right"
                           />
                         </td>
-                        <td className="p-2 text-right">{((item.quantity || 0) * (item.unitPrice || 0)).toFixed(2)}</td>
+                        <td className="p-2 text-right">
+                          {((item.quantity || 0) * (item.unitPrice || 0)).toFixed(2)}
+                        </td>
                         <td className="p-2 text-right">
                           {formData.items.length > 1 && (
-                            <button onClick={() => removeItemRow(index)} className="text-red-500 hover:underline text-sm">
+                            <button
+                              onClick={() => removeItemRow(index)}
+                              className="text-red-500 hover:underline text-sm"
+                            >
                               Remove
                             </button>
                           )}
@@ -430,13 +601,16 @@ export default function InvoiceTable() {
           <div className="bg-white rounded-xl p-8 w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-xl">
             <h2 className="text-2xl font-bold text-gray-900 mb-6">Pay an Invoice</h2>
 
-            {/* Form */}
             <div className="space-y-5">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Invoice ID</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Invoice ID
+                </label>
                 <input
                   value={payFormData.invoiceId}
-                  onChange={(e) => setPayFormData({ ...payFormData, invoiceId: e.target.value })}
+                  onChange={(e) =>
+                    setPayFormData({ ...payFormData, invoiceId: e.target.value })
+                  }
                   placeholder="Enter Invoice ID"
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />

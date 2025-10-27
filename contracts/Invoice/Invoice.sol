@@ -33,12 +33,20 @@ contract InvoiceManager {
     }
 
     // Create a new invoice
-    function createInvoice(string memory title, Item[] memory items, address payer) public {
+    function createInvoice(
+        string memory title,
+        Item[] memory items,
+        address payer
+    ) public {
         uint256 invoiceId = nextInvoiceId++;
         Invoice storage inv = invoices[invoiceId];
         inv.owner = msg.sender;
-        inv.payer = payer;
         inv.id = invoiceId;
+
+        // Payer
+        inv.payer = payer;
+        attributedInvoice[payer].push(invoiceId);
+
         inv.title = title;
         inv.paid = false;
 
@@ -57,19 +65,25 @@ contract InvoiceManager {
 
     function deleteInvoice(uint256 invoiceId) external {
         Invoice storage inv = invoices[invoiceId];
-        require(inv.owner == msg.sender, "Not invoice owner");
+        require(
+            inv.owner == msg.sender ||
+                (inv.payer == msg.sender && inv.paid == true),
+            "Can't delete invoice"
+        );
+
+        // Save before delete
+        address owner = inv.owner;
+        address payer = inv.payer;
 
         // Delete invoice
         delete invoices[invoiceId];
 
         // Remove from owner's list
-        uint256[] storage ownerInvs = ownerInvoices[msg.sender];
-        for (uint256 i = 0; i < ownerInvs.length; i++) {
-            if (ownerInvs[i] == invoiceId) {
-                ownerInvs[i] = ownerInvs[ownerInvs.length - 1];
-                ownerInvs.pop();
-                break;
-            }
+        _removeId(ownerInvoices[owner], invoiceId);
+
+        // Remove from payer's attributed list
+        if (payer != address(0)) {
+            _removeId(attributedInvoice[payer], invoiceId);
         }
     }
 
@@ -147,5 +161,30 @@ contract InvoiceManager {
         }
 
         return result;
+    }
+
+    // Get attributed Invoice
+    function getAttributedInvoice(
+        address attributedAddress
+    ) external view returns (Invoice[] memory) {
+        uint256[] memory ids = attributedInvoice[attributedAddress];
+        Invoice[] memory result = new Invoice[](ids.length);
+
+        for (uint256 i = 0; i < ids.length; i++) {
+            result[i] = invoices[ids[i]];
+        }
+
+        return result;
+    }
+
+    // Helpers //
+    function _removeId(uint256[] storage arr, uint256 id) internal {
+        for (uint256 i = 0; i < arr.length; i++) {
+            if (arr[i] == id) {
+                arr[i] = arr[arr.length - 1];
+                arr.pop();
+                break;
+            }
+        }
     }
 }

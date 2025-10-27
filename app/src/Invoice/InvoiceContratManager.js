@@ -60,3 +60,7 @@ export async function getTotalPrice(invoiceId) {
 export async function payInvoice(invoiceId, amountWei) {
   await (await invoiceContract.payInvoice(invoiceId, { value: amountWei })).wait();
 }
+
+export async function getAttributedInvoice(address) {
+  return await (await invoiceContract.getAttributedInvoice(address));
+}
