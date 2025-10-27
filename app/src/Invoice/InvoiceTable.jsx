@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Search, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
-import { ZeroAddress, formatEther } from 'ethers';
+import toast, { Toaster } from 'react-hot-toast';
+import { ZeroAddress, formatEther, parseEther } from 'ethers';
 import {
   createInvoice,
   getAttributedInvoice,
@@ -48,7 +49,6 @@ export default function InvoiceTable() {
     };
 
     initializeApp();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Load invoices (owner + attributed) and merge
@@ -166,14 +166,28 @@ export default function InvoiceTable() {
       );
 
       if (!hasValidItem) {
-        alert('Add at least one item with valid quantity and price');
+        toast.error('Add at least one item with valid quantity and price')
         return;
       }
 
-      await createInvoice(
-        formData.title,
-        formData.items,
-        formData.attributedAddress || ZeroAddress
+      // To wei
+      const itemsInWei = formData.items.map((i) => ({
+        ...i,
+        unitPrice: parseEther(i.unitPrice.toString()),
+      }));
+
+      // Create invoice
+      toast.promise(
+        createInvoice(
+          formData.title,
+          itemsInWei,
+          formData.attributedAddress || ZeroAddress
+        ),
+        {
+          loading: 'Saving...',
+          success: <b>Invoice created !</b>,
+          error: <b>User rejected tx.</b>,
+        }
       );
 
       await loadInvoices();
@@ -192,7 +206,7 @@ export default function InvoiceTable() {
     }
   };
 
-  // Pay via modal (manual ID)
+  // Pay via modal
   async function handlePayInvoice() {
     try {
       const id = (payFormData.invoiceId || '').trim();
@@ -201,12 +215,11 @@ export default function InvoiceTable() {
         return;
       }
 
+      // Get total price and pay
       const totalWei = await getTotalPrice(id);
-      const ok = confirm(`Pay invoice #${id} for ${formatEther(totalWei)} ETH ?`);
-      if (!ok) return;
-
       await payInvoice(id, totalWei);
 
+      // Reset
       setPayFormData({ invoiceId: '' });
       setShowImportModal(false);
       await loadInvoices();
@@ -226,10 +239,8 @@ export default function InvoiceTable() {
         return;
       }
       const totalWei = await getTotalPrice(id);
-      const ok = confirm(`Pay invoice #${id} for ${totalWei} ETH ?`);
-      if (!ok) return console.log('error');
-
       await payInvoice(id, totalWei);
+
       await loadInvoices();
     } catch (error) {
       console.error('Error paying invoice:', error);
@@ -241,9 +252,18 @@ export default function InvoiceTable() {
 
   // Delete Invoice
   function handleDeleteInvoice(invoiceId) {
-    deleteInvoice(invoiceId).then(() => {
-      loadInvoices();
-    });
+    // Create invoice
+      toast.promise(
+        deleteInvoice(invoiceId),
+        {
+          loading: 'Delete...',
+          success: <b>Invoice deleted !</b>,
+          error: <b>User rejected tx.</b>,
+        }
+      ).then(() => {
+        loadInvoices();
+      });
+      
   }
 
   // Filter Invoices (robuste)
@@ -260,6 +280,7 @@ export default function InvoiceTable() {
 
   return (
     <div className="bg-white min-h-screen">
+      <div><Toaster /></div>
       {/* Header */}
       <div className="border-b border-gray-200 px-8 py-6 flex justify-between items-center">
         <h1 className="text-4xl font-bold text-gray-900">Invoice Manager</h1>
@@ -354,11 +375,10 @@ export default function InvoiceTable() {
               {filteredInvoices.map((invoice, index) => (
                 <tr
                   key={invoice.id}
-                  className={`border-b border-gray-100 hover:bg-gray-50 ${
-                    index === filteredInvoices.length - 1
-                      ? 'border-b-2 border-gray-300'
-                      : ''
-                  }`}
+                  className={`border-b border-gray-100 hover:bg-gray-50 ${index === filteredInvoices.length - 1
+                    ? 'border-b-2 border-gray-300'
+                    : ''
+                    }`}
                 >
                   <td className="py-4 px-2 text-gray-900 font-medium">
                     {invoice.title}
@@ -384,11 +404,10 @@ export default function InvoiceTable() {
                       <button
                         onClick={() => handleQuickPay(invoice.id)}
                         disabled={payingId === invoice.id}
-                        className={`font-medium cursor-pointer ${
-                          payingId === invoice.id
-                            ? 'text-gray-400 cursor-not-allowed'
-                            : 'text-blue-600 hover:text-blue-800'
-                        }`}
+                        className={`font-medium cursor-pointer ${payingId === invoice.id
+                          ? 'text-gray-400 cursor-not-allowed'
+                          : 'text-blue-600 hover:text-blue-800'
+                          }`}
                         title={
                           payingId === invoice.id ? 'Processing…' : 'Pay this invoice'
                         }

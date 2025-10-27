@@ -14,13 +14,9 @@ const invoiceContract = new ethers.Contract(
 );
 
 export async function createInvoice(title, items, payerAddress = ZeroAddress) {
-  await (await invoiceContract.createInvoice(title, items, payerAddress)).wait();
 
-  // get id
-  const next = await nextInvoiceId();
-  let invoiceId = Number(next) - 1;
 
-  return await getInvoice(invoiceId);
+  return await (await invoiceContract.createInvoice(title, items, payerAddress)).wait();
 }
 
 export async function deleteInvoice(invoiceId) {
