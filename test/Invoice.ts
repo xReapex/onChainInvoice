@@ -166,15 +166,15 @@ describe('Invoice', function () {
     await (await invoiceContract.connect(owner).addItem(0, 'Item', 1, ethers.parseEther('1'))).wait();
     
     // Test avec staticCall (simulation sans gas)
-    await expect(
+    expect(
         invoiceContract.connect(addr1).addItem.staticCall(0, 'Item 2', 1, ethers.parseEther('1'))
     ).to.be.revertedWith('Not invoice owner');
     
-    await expect(
+    expect(
         invoiceContract.connect(addr1).removeItem.staticCall(0, 0)
     ).to.be.revertedWith('Not invoice owner');
     
-    await expect(
+    expect(
         invoiceContract.connect(addr1).deleteInvoice.staticCall(0)
     ).to.be.revertedWith('Can\'t delete invoice');
 });
