@@ -30,5 +30,51 @@ On-Chain Invoice is a small project designed to practice Solidity smart contract
 - **Development Approach**: Test-Driven Development (TDD)
 
 ## 🚀 Getting Started
+```bash
+# Clone the repository
+git clone https://github.com/xReapex/onChainInvoice.git
 
-wip
+# Install dependencies
+npm install
+
+# Run tests
+npx hardhat test
+
+# Start local blockchain
+npx hardhat node
+
+# Deploy contracts (change network inside file)
+npx hardhat run scripts/deploy.ts
+
+# Start frontend
+cd app
+npm run dev
+```
+
+## 📝 Usage
+
+1. **Create an Invoice**
+   - Add items with title, quantity, and price
+   - Optionally specify a payer address
+   - Submit to create the on-chain invoice
+
+2. **Pay an Invoice**
+   - View available invoices
+   - Pay using your wallet (if you're the assigned address or if no address is assigned)
+
+3. **Delete an Invoice**
+   - As owner: Delete any of your unpaid invoices
+   - As payer: Delete invoices you've paid
+
+## 🎓 Learning Goals
+
+This project demonstrates:
+- Smart contract development with Solidity
+- Testing smart contracts with Hardhat
+- React integration with Web3
+- On-chain data storage patterns
+- Transaction handling and wallet integration
+
+## 📄 License
+
+MIT License - feel free to use this project for learning and development purposes.
