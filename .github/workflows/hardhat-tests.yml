@@ -45,4 +45,7 @@ jobs:
           done
 
       - name: Run tests on localhost
+        env:
+          SEPOLIA_RPC_URL: ${{ secrets.SEPOLIA_RPC_URL }}
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
         run: npx hardhat test --network localhost
