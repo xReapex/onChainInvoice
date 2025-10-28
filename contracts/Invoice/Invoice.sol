@@ -67,11 +67,8 @@ contract InvoiceManager is ReentrancyGuard {
 
     function deleteInvoice(uint256 invoiceId) external {
         Invoice storage inv = invoices[invoiceId];
-        require(
-            inv.owner == msg.sender ||
-                (inv.payer == msg.sender && inv.paid == true),
-            "Can't delete invoice"
-        );
+        require(inv.owner != address(0), "Invoice does not exist");
+        require(inv.owner == msg.sender || (inv.payer == msg.sender && inv.paid == true), "Can't delete invoice");
 
         // Save before delete
         address owner = inv.owner;
@@ -97,14 +94,18 @@ contract InvoiceManager is ReentrancyGuard {
         uint256 unitPrice
     ) external {
         Invoice storage inv = invoices[invoiceId];
+        require(inv.owner != address(0), "Invoice does not exist");
         require(inv.owner == msg.sender, "Not invoice owner");
+        require(!inv.paid, "Cannot modify paid invoice");
         inv.items.push(Item(description, quantity, unitPrice));
     }
 
     // Remove an item from an invoice by index
     function removeItem(uint256 invoiceId, uint256 index) external {
         Invoice storage inv = invoices[invoiceId];
+        require(inv.owner != address(0), "Invoice does not exist");
         require(inv.owner == msg.sender, "Not invoice owner");
+        require(!inv.paid, "Cannot modify paid invoice");
         require(index < inv.items.length, "Index out of bounds");
 
         inv.items[index] = inv.items[inv.items.length - 1];
@@ -119,6 +120,8 @@ contract InvoiceManager is ReentrancyGuard {
     // Calculate total price of an invoice
     function getTotalPrice(uint256 invoiceId) public view returns (uint256) {
         Invoice storage inv = invoices[invoiceId];
+        require(inv.owner != address(0), "Invoice does not exist");
+
         uint256 total = 0;
         for (uint256 i = 0; i < inv.items.length; i++) {
             total += inv.items[i].quantity * inv.items[i].unitPrice;
@@ -129,6 +132,8 @@ contract InvoiceManager is ReentrancyGuard {
     // Pay an invoice
     function payInvoice(uint256 invoiceId) external payable nonReentrant {
         Invoice storage inv = invoices[invoiceId];
+        require(inv.owner != address(0), "Invoice does not exist");
+
         uint256 totalPrice = getTotalPrice(invoiceId);
 
         if (inv.payer != address(0)) {
@@ -138,16 +143,19 @@ contract InvoiceManager is ReentrancyGuard {
             );
         }
         require(msg.value >= totalPrice, "Insufficient payment");
-
+        require(!inv.paid, "Invoice already paid");
+        
         // Mark invoice as paid
         inv.paid = true;
 
         // Transfer payment to invoice owner
-        payable(inv.owner).transfer(totalPrice);
+        (bool transferSuccess, ) = payable(inv.owner).call{value: totalPrice}("");
+        require(transferSuccess, "Payment transfer failed");
 
         // Refund excess payment
         if (msg.value > totalPrice) {
-            payable(msg.sender).transfer(msg.value - totalPrice);
+            (bool refundSuccess, ) = payable(msg.sender).call{value: msg.value - totalPrice}("");
+            require(refundSuccess, "Payment transfer failed");
         }
     }
 
