@@ -163,7 +163,8 @@ describe('Invoice', function () {
 
     it('should revert addItem/removeItem/deleteInvoice when not owner', async () => {
         await (await invoiceContract.connect(owner).createInvoice('Test Invoice', [], ZeroAddress)).wait();
-        await expect(invoiceContract.connect(addr1).addItem(0, 'Item', 1, ethers.parseEther('1'))).to.be.revertedWith('Not invoice owner');
+        await (await invoiceContract.connect(owner).addItem(0, 'Item', 1, ethers.parseEther('1'))).wait();
+        await expect(invoiceContract.connect(addr1).addItem(0, 'Item 2', 1, ethers.parseEther('1'))).to.be.revertedWith('Not invoice owner');
         await expect(invoiceContract.connect(addr1).removeItem(0, 0)).to.be.revertedWith('Not invoice owner');
         await expect(invoiceContract.connect(addr1).deleteInvoice(0)).to.be.revertedWith('Can\'t delete invoice');
     });
