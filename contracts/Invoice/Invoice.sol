@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-contract InvoiceManager {
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+
+contract InvoiceManager is ReentrancyGuard {
     // Item
     struct Item {
         string description;
@@ -115,7 +117,7 @@ contract InvoiceManager {
     }
 
     // Calculate total price of an invoice
-    function getTotalPrice(uint256 invoiceId) external view returns (uint256) {
+    function getTotalPrice(uint256 invoiceId) public view returns (uint256) {
         Invoice storage inv = invoices[invoiceId];
         uint256 total = 0;
         for (uint256 i = 0; i < inv.items.length; i++) {
@@ -125,9 +127,9 @@ contract InvoiceManager {
     }
 
     // Pay an invoice
-    function payInvoice(uint256 invoiceId) external payable {
+    function payInvoice(uint256 invoiceId) external payable nonReentrant {
         Invoice storage inv = invoices[invoiceId];
-        uint256 totalPrice = this.getTotalPrice(invoiceId);
+        uint256 totalPrice = getTotalPrice(invoiceId);
 
         if (inv.payer != address(0)) {
             require(
