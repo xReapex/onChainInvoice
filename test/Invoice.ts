@@ -162,22 +162,12 @@ describe('Invoice', function () {
     });
 
     it('should revert addItem/removeItem/deleteInvoice when not owner', async () => {
-    await (await invoiceContract.connect(owner).createInvoice('Test Invoice', [], ZeroAddress)).wait();
-    await (await invoiceContract.connect(owner).addItem(0, 'Item', 1, ethers.parseEther('1'))).wait();
-    
-    // Test avec staticCall (simulation sans gas)
-    expect(
-        invoiceContract.connect(addr1).addItem.staticCall(0, 'Item 2', 1, ethers.parseEther('1'))
-    ).to.be.revertedWith('Not invoice owner');
-    
-    expect(
-        invoiceContract.connect(addr1).removeItem.staticCall(0, 0)
-    ).to.be.revertedWith('Not invoice owner');
-    
-    expect(
-        invoiceContract.connect(addr1).deleteInvoice.staticCall(0)
-    ).to.be.revertedWith('Can\'t delete invoice');
-});
+        await (await invoiceContract.connect(owner).createInvoice('Test Invoice', [], ZeroAddress)).wait();
+        await (await invoiceContract.connect(owner).addItem(0, 'Item', 1, ethers.parseEther('1'))).wait();
+        expect(invoiceContract.connect(addr1).addItem.staticCall(0, 'Item 2', 1, ethers.parseEther('1'))).to.be.revertedWith('Not invoice owner');
+        expect(invoiceContract.connect(addr1).removeItem.staticCall(0, 0)).to.be.revertedWith('Not invoice owner');
+        expect(invoiceContract.connect(addr1).deleteInvoice.staticCall(0)).to.be.revertedWith('Can\'t delete invoice');
+    });
 
     it('should retreive invoices attributed to address', async () => {
         await (await invoiceContract.connect(owner).createInvoice('Test Invoice', [], addr1.address)).wait();
